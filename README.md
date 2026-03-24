@@ -1,5 +1,9 @@
 # Pac-Man
 
+<p align="center">
+  <img src="assets/pacman.png" alt="Pac-Man" width="128">
+</p>
+
 A classic Pac-Man game built with Python and Pygame.
 
 ## Setup
