@@ -56,7 +56,7 @@ OPPOSITE_DIR = {
 DIR_BIT = {DIR_RIGHT: 0, DIR_DOWN: 1, DIR_LEFT: 2, DIR_UP: 3}
 
 # All real directions (for iteration)
-ALL_DIRS = (DIR_RIGHT, DIR_DOWN, DIR_LEFT, DIR_UP)
+ALL_DIRS = (DIR_UP, DIR_LEFT, DIR_DOWN, DIR_RIGHT)
 
 # ---------------------------------------------------------------------------
 # Speeds — MUST be integer divisors of TILE_SIZE (24)
@@ -71,7 +71,14 @@ TUNNEL_SPEED = 1
 # Timings (milliseconds — time-based, not frame-based)
 # ---------------------------------------------------------------------------
 FRIGHTENED_MS = 6000
-FRIGHTENED_FLASH_MS = 4000  # start flashing with this much left
+FRIGHTENED_FLASH_MS = 2000  # start flashing with this much *remaining*
+
+# Per-level frightened durations (ms).  Index 0 = level 1.
+# At 0 ms, ghosts reverse but don't turn blue.
+FRIGHT_TIMES = [6000, 5000, 4000, 3000, 2000, 5000, 2000, 2000,
+                1000, 5000, 2000, 1000, 1000, 3000, 1000, 1000,
+                0, 1000, 0]
+# Levels beyond this table use 0 (no fright).
 
 # Scatter / Chase durations (ms) per phase
 MODE_DURATIONS = [7000, 20000, 7000, 20000, 5000, 20000, 5000, -1]

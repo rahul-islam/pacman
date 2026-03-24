@@ -8,7 +8,7 @@ from .constants import (
     DIR_RIGHT, DIR_LEFT, DIR_UP, DIR_DOWN, DIR_NONE,
     DIRECTION_VEC, OPPOSITE_DIR, ALL_DIRS,
     PACMAN_SPEED, GHOST_SPEED, FRIGHTENED_SPEED, EATEN_SPEED, TUNNEL_SPEED,
-    FRIGHTENED_MS, FRIGHTENED_FLASH_MS, GHOST_RELEASE_MS,
+    FRIGHTENED_MS, FRIGHTENED_FLASH_MS, FRIGHT_TIMES, GHOST_RELEASE_MS,
     MODE_DURATIONS,
     POINTS_APPLE, POINTS_STRAWBERRY, POINTS_GHOST_BASE,
     GHOST_HOUSE_ENTRANCE, GHOST_HOUSE_CENTER, PACMAN_SPAWN, FRUIT_POS,
@@ -166,7 +166,7 @@ class BaseGhost(Character):
     """Common ghost behavior. Subclass to define chase_ai/scatter_ai."""
 
     scatter_target: tuple = (0, 0)
-    release_pct: float = 0.0  # % of dots that must be eaten to release
+    release_dots: int = 0  # dots Pac-Man must eat before this ghost exits house
 
     def __init__(self, name, index):
         sc, sr = GHOST_STARTS[name]
@@ -176,6 +176,7 @@ class BaseGhost(Character):
         self.mode = GhostMode.INDOOR if index != 0 else GhostMode.SCATTER
         self.prev_mode = GhostMode.SCATTER
         self.fright_start = 0
+        self.fright_duration = FRIGHTENED_MS
         self.mode_start = 0
         self.mode_index = 0
         self.bob_dir = 1
@@ -195,6 +196,7 @@ class BaseGhost(Character):
         self.prev_mode = GhostMode.SCATTER
         self.direction = DIR_LEFT if self.index == 0 else DIR_UP
         self.fright_start = 0
+        self.fright_duration = FRIGHTENED_MS
         self.mode_start = now_ms
         self.mode_index = 0
         self.bob_dir = 1
@@ -220,7 +222,7 @@ class BaseGhost(Character):
 
         if self.mode == GhostMode.FRIGHTENED:
             elapsed = now_ms - self.fright_start
-            if elapsed >= FRIGHTENED_MS:
+            if elapsed >= self.fright_duration:
                 self.mode = self.prev_mode
                 # Compensate mode_start so the scatter/chase timer resumes
                 # where it left off (timer was effectively paused during fright)
@@ -368,19 +370,25 @@ class BaseGhost(Character):
     # ------------------------------------------------------------------
     # State changes
     # ------------------------------------------------------------------
-    def enter_frightened(self, now_ms):
+    def enter_frightened(self, now_ms, level=1):
         if self.mode in (GhostMode.EATEN, GhostMode.INDOOR):
             return
+        # Look up per-level fright duration
+        idx = min(level - 1, len(FRIGHT_TIMES) - 1)
+        fright_ms = FRIGHT_TIMES[idx] if idx >= 0 else 0
         already_frightened = self.mode == GhostMode.FRIGHTENED
         if not already_frightened:
             self.prev_mode = self.mode
-        self.mode = GhostMode.FRIGHTENED
-        self.fright_start = now_ms
-        self.speed = FRIGHTENED_SPEED
-        # Only reverse direction on the first fright trigger, not re-triggers
-        if not already_frightened:
+            # Always reverse on first fright trigger
             rev = OPPOSITE_DIR.get(self.direction, self.direction)
             self.set_direction(rev)
+        if fright_ms == 0:
+            # No frightened time at this level — just reverse, don't turn blue
+            return
+        self.mode = GhostMode.FRIGHTENED
+        self.fright_start = now_ms
+        self.fright_duration = fright_ms
+        self.speed = FRIGHTENED_SPEED
 
     def get_eaten(self, now_ms):
         self.mode = GhostMode.EATEN
@@ -409,10 +417,9 @@ class BaseGhost(Character):
                 if abs(self.py - center_y) >= HALF_TILE:
                     self.bob_dir *= -1
 
-            # Check release conditions
+            # Check release conditions: dot-count threshold or timer
             elapsed = now_ms - self.spawn_time
-            pct = (dots_eaten / max(total_dots, 1)) * 100
-            if elapsed >= self.release_ms or pct >= self.release_pct:
+            if elapsed >= self.release_ms or dots_eaten >= self.release_dots:
                 self._exiting = True
                 self.py = center_y  # snap Y to center row
             return
@@ -456,9 +463,19 @@ class BaseGhost(Character):
         # Slight speed increase at higher levels
         if level >= 5:
             base = 3
-        # Cruise Elroy
-        if self.name == "blinky" and dots_remaining < 20:
-            base = 3
+        # Cruise Elroy — Blinky speeds up in two stages as dots dwindle.
+        # Thresholds increase with level (level 1: 20/10, level 2: 30/15,
+        # level 3+: 40/20).  With integer speeds, both stages map to
+        # speed 3 (the next divisor of TILE_SIZE above 2).
+        if self.name == "blinky":
+            if level == 1:
+                elroy1, elroy2 = 20, 10
+            elif level == 2:
+                elroy1, elroy2 = 30, 15
+            else:
+                elroy1, elroy2 = 40, 20
+            if dots_remaining <= elroy1:
+                base = max(base, 3)
         self.speed = base
 
     # ------------------------------------------------------------------
@@ -470,7 +487,7 @@ class BaseGhost(Character):
             return
 
         if self.mode == GhostMode.FRIGHTENED:
-            remaining = FRIGHTENED_MS - (now_ms - self.fright_start)
+            remaining = self.fright_duration - (now_ms - self.fright_start)
             flashing = remaining < FRIGHTENED_FLASH_MS and (now_ms // 150) % 2 == 1
             img = assets["white_ghost"] if flashing else assets["blue_ghost"]
         else:
@@ -500,7 +517,7 @@ class BaseGhost(Character):
 class Blinky(BaseGhost):
     """Red — direct pursuit."""
     scatter_target = SCATTER_TARGETS["blinky"]
-    release_pct = 0
+    release_dots = 0
 
     def __init__(self):
         super().__init__("blinky", 0)
@@ -523,7 +540,7 @@ class Blinky(BaseGhost):
 class Pinky(BaseGhost):
     """Pink — ambush 4 cells ahead (matching original Pac-Man)."""
     scatter_target = SCATTER_TARGETS["pinky"]
-    release_pct = 0
+    release_dots = 0
 
     def __init__(self):
         super().__init__("pinky", 1)
@@ -531,13 +548,18 @@ class Pinky(BaseGhost):
     def chase_target(self, pacman, blinky):
         pc, pr = pacman.get_cell()
         dx, dy = DIRECTION_VEC.get(pacman.direction, (0, 0))
-        return (pc + dx * 4, pr + dy * 4)
+        tc, tr = pc + dx * 4, pr + dy * 4
+        # Original arcade overflow bug: when Pac-Man faces UP,
+        # the target is also shifted 4 tiles to the left.
+        if pacman.direction == DIR_UP:
+            tc -= 4
+        return (tc, tr)
 
 
 class Inky(BaseGhost):
     """Cyan — flanking (vector from Blinky through 2-ahead)."""
     scatter_target = SCATTER_TARGETS["inky"]
-    release_pct = 8
+    release_dots = 30
 
     def __init__(self):
         super().__init__("inky", 2)
@@ -546,6 +568,10 @@ class Inky(BaseGhost):
         pc, pr = pacman.get_cell()
         dx, dy = DIRECTION_VEC.get(pacman.direction, (0, 0))
         ahead_c, ahead_r = pc + dx * 2, pr + dy * 2
+        # Original arcade overflow bug: when Pac-Man faces UP,
+        # the intermediate point is also shifted 2 tiles left.
+        if pacman.direction == DIR_UP:
+            ahead_c -= 2
         bc, br = blinky.get_cell()
         return (2 * ahead_c - bc, 2 * ahead_r - br)
 
@@ -553,7 +579,7 @@ class Inky(BaseGhost):
 class Clyde(BaseGhost):
     """Orange — shy (scatter when close)."""
     scatter_target = SCATTER_TARGETS["clyde"]
-    release_pct = 15
+    release_dots = 60
 
     def __init__(self):
         super().__init__("clyde", 3)

@@ -159,6 +159,15 @@ class GameplayScene(Scene):
             from .constants import GHOST_RELEASE_MS
             base_release = GHOST_RELEASE_MS[g.index]
             g.release_ms = max(base_release - (self.level - 1) * 500, 0)
+            # Reduce dot thresholds at higher levels (ghosts release earlier)
+            # Level 1: Pinky=0, Inky=30, Clyde=60
+            # Level 2: Pinky=0, Inky=0, Clyde=50
+            # Level 3+: all release immediately or very quickly
+            if self.level >= 3:
+                g.release_dots = 0
+            elif self.level == 2:
+                # Only Clyde still has a dot threshold at level 2
+                g.release_dots = max(g.__class__.release_dots - 30, 0)
 
     # ------------------------------------------------------------------
     # Events
@@ -235,7 +244,7 @@ class GameplayScene(Scene):
             if is_pellet:
                 self.ghost_eat_combo = POINTS_GHOST_BASE
                 for g in self.ghosts:
-                    g.enter_frightened(now)
+                    g.enter_frightened(now, self.level)
                 if self.sound:
                     self.sound.play_fright()
 
