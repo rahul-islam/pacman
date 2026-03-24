@@ -74,12 +74,13 @@ class MenuScene(Scene):
 
         names = ["blinky", "pinky", "inky", "clyde"]
         cols = [RED, PINK, CYAN, ORANGE]
-        sx = SCREEN_WIDTH // 2 - 2 * TILE_SIZE - 12
+        spacing = 80
+        sx = SCREEN_WIDTH // 2 - (spacing * 3) // 2
         for i, n in enumerate(names):
-            x = sx + i * (TILE_SIZE + 8)
-            surface.blit(a[n], (x, 220))
+            x = sx + i * spacing
+            surface.blit(a[n], (x - HALF_TILE, 220))
             lbl = f["small"].render(n.upper(), True, cols[i])
-            surface.blit(lbl, (x + HALF_TILE - lbl.get_width() // 2, 250))
+            surface.blit(lbl, (x - lbl.get_width() // 2, 250))
 
         for i, line in enumerate([
             "Arrow Keys / WASD to move",

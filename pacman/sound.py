@@ -92,5 +92,11 @@ class SoundManager:
     def play_intermission(self):
         self._play("intermission")
 
+    def play_menu_music(self):
+        self._play("credit", loops=-1, channel=self._siren_channel)
+
+    def stop_menu_music(self):
+        self._siren_channel.stop()
+
     def stop_all(self):
         pygame.mixer.stop()
