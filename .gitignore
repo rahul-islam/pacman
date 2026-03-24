@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+highscore.txt
+tests/
+test_*.py
+*.egg-info/
+.env
+venv/
+.claude/
+test/
