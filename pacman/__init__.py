@@ -1,1 +1,1 @@
-"""Pac-Man game package."""
+"""Neon Pac-Man."""

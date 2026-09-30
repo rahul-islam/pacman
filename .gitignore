@@ -2,11 +2,9 @@ __pycache__/
 *.pyc
 *.pyo
 .DS_Store
-highscore.txt
-tests/
-test_*.py
+storage.json
 *.egg-info/
 .env
 venv/
 .claude/
-test/
+highscore.txt
